@@ -54,6 +54,9 @@ f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 f:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 f:RegisterEvent("GROUP_ROSTER_UPDATE")
+f:RegisterEvent("PLAYER_TARGET_CHANGED")
+f:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
+f:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 
 -- =========================================================================
 -- DATABASE BUILDING
@@ -638,6 +641,58 @@ function DBC:PruneOldRuns(forceReport)
             DBC:Debug("Pruned " .. count .. " old runs.")
         end
     end
+end
+
+-- =========================================================================
+-- DYNAMIC RARE MOB DETECTION
+-- =========================================================================
+function DBC:CheckForRareMob(unit)
+    if not unit or not DBC.CurrentInstanceKey then return end
+    if not DBC.RareMobs then return end -- No data loaded
+    
+    local guid = UnitGUID(unit)
+    if not guid then return end
+    
+    local instID, npcID, unitType = DBC:ParseNpcGuid(guid)
+    if not npcID then return end
+    
+    -- Check if it's a known rare
+    local rareName = DBC.RareMobs[npcID]
+    if rareName then
+        local instData = DBC.BossDB.instances[DBC.CurrentInstanceKey]
+        
+        -- Check if already in list
+        if not instData.bossByNpcId[npcID] then
+            -- Add dynamically!
+            DBC:Debug("Discovered new rare mob: " .. rareName)
+            
+            local newBoss = {
+                index = #instData.bosses + 1,
+                npcId = npcID,
+                name = rareName,
+                specialType = "rare"
+            }
+            
+            table.insert(instData.bosses, newBoss)
+            instData.bossByNpcId[npcID] = newBoss
+            DBC.BossDB.npcToInstance[npcID] = DBC.CurrentInstanceKey
+            
+            -- Sort by index (or keep at bottom)
+            DBC:UpdateUI()
+        end
+    end
+end
+
+function DBC:PLAYER_TARGET_CHANGED()
+    DBC:CheckForRareMob("target")
+end
+
+function DBC:UPDATE_MOUSEOVER_UNIT()
+    DBC:CheckForRareMob("mouseover")
+end
+
+function DBC:NAME_PLATE_UNIT_ADDED(unit)
+    DBC:CheckForRareMob(unit)
 end
 
 -- =========================================================================

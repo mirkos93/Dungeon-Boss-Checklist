@@ -12,6 +12,9 @@ SavedVariables/
 # Python scripts used for database generation/extraction
 generate_coords.py
 generate_coords_v2.py
+extract_rarescanner.py
+extract_raremobs.py
+*.py
 
 # OS generated files
 .DS_Store

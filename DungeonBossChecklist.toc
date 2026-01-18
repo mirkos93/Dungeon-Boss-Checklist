@@ -11,6 +11,7 @@ lib/CallbackHandler-1.0/CallbackHandler-1.0.lua
 
 Compat.lua
 data.lua
+RareMobs.lua
 Core.lua
 UI.lua
 Options.lua
