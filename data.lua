@@ -895,6 +895,7 @@ data["BlackfathomDeeps"] = {
 }
 
 data["TheStockade"] = {
+	alias = "Stormwind Stockade",
 	MapID = 717,
 	InstanceID = 34,
 	AtlasModule = ATLAS_MODULE_NAME,

@@ -13,6 +13,7 @@ Compat.lua
 data.lua
 RareMobs.lua
 DungeonRares.lua
+BossCoordinates.lua
 Core.lua
 UI.lua
 Options.lua

@@ -401,15 +401,37 @@ function DBC:GetCheckbox(index)
         end)
         cb.LootBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+        -- Map Button (Pin)
+        cb.MapBtn = CreateFrame("Button", nil, cb)
+        cb.MapBtn:SetSize(14, 14)
+        cb.MapBtn:SetPoint("RIGHT", cb.LootBtn, "LEFT", -2, 0)
+        cb.MapBtn:SetNormalTexture("Interface\\Icons\\INV_Misc_Map02")
+        cb.MapBtn:GetNormalTexture():SetTexCoord(0.1, 0.9, 0.1, 0.9) -- Zoom icon
+        cb.MapBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
+        cb.MapBtn:SetScript("OnEnter", function(self)
+            if self.coords then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText("Location", 1, 1, 1)
+                GameTooltip:AddLine(string.format("Coords: %d, %d", self.coords[1], self.coords[2]), 1, 0.82, 0)
+                if self.coords[3] then
+                    GameTooltip:AddLine(self.coords[3], 0.8, 0.8, 0.8, true)
+                end
+                GameTooltip:Show()
+            end
+        end)
+        cb.MapBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        cb.MapBtn:Hide()
+
         -- Text
         cb.Text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightLeft")
         cb.Text:SetPoint("LEFT", cb.Icon, "RIGHT", 5, 0)
-        cb.Text:SetPoint("RIGHT", cb.LootBtn, "LEFT", -5, 0) -- Anchor to LootBtn
+        cb.Text:SetPoint("RIGHT", cb.MapBtn, "LEFT", -2, 0) -- Anchor to MapBtn area
         
         -- Quest Icon
         cb.QuestIcon = cb:CreateTexture(nil, "OVERLAY")
         cb.QuestIcon:SetSize(12, 12)
-        cb.QuestIcon:SetPoint("RIGHT", cb.LootBtn, "LEFT", -2, 0) -- Left of LootBtn
+        cb.QuestIcon:SetPoint("RIGHT", cb.MapBtn, "LEFT", -2, 0) -- Left of MapBtn
+
         cb.QuestIcon:SetTexture("Interface\\GossipFrame\\ActiveQuestIcon")
         cb.QuestIcon:Hide()
 
@@ -600,6 +622,23 @@ function DBC:UpdateUI()
             isKilled = true
         end
         cb.isKilled = isKilled
+
+        -- Coordinates Logic
+        local coords = nil
+        if DBC.BossCoordinates and instData.mapId and DBC.BossCoordinates[instData.mapId] then
+            coords = DBC.BossCoordinates[instData.mapId][boss.npcId]
+        end
+
+        if coords then
+            cb.MapBtn.coords = coords
+            cb.MapBtn:Show()
+            cb.Text:SetPoint("RIGHT", cb.MapBtn, "LEFT", -2, 0)
+            cb.QuestIcon:SetPoint("RIGHT", cb.MapBtn, "LEFT", -2, 0)
+        else
+            cb.MapBtn:Hide()
+            cb.Text:SetPoint("RIGHT", cb.LootBtn, "LEFT", -5, 0)
+            cb.QuestIcon:SetPoint("RIGHT", cb.LootBtn, "LEFT", -2, 0)
+        end
 
         -- Icons & Checkbox State
         if isKilled then

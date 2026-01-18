@@ -57,6 +57,7 @@ f:RegisterEvent("GROUP_ROSTER_UPDATE")
 f:RegisterEvent("PLAYER_TARGET_CHANGED")
 f:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 f:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+f:RegisterEvent("CHAT_MSG_SYSTEM")
 
 -- =========================================================================
 -- DATABASE BUILDING
@@ -668,13 +669,22 @@ end
 -- =========================================================================
 function DBC:CheckForRareMob(unit)
     if not unit or not DBC.CurrentInstanceKey then return end
-    if not DBC.RareMobs then return end -- No data loaded
     
     local guid = UnitGUID(unit)
     if not guid then return end
     
     local instID, npcID, unitType = DBC:ParseNpcGuid(guid)
-    if not npcID then return end
+    if not npcID or not instID then return end
+
+    -- DETECT FRESH RUN: If the mob belongs to a different instance ID than the loaded one,
+    -- it means the player reset the instance. Switch context immediately.
+    if DBC.CurrentInstanceID and tostring(instID) ~= tostring(DBC.CurrentInstanceID) then
+        DBC:Debug("New Instance ID detected from unit GUID. Switching run.")
+        DBC:EnsureRunContext(DBC.CurrentInstanceKey, instID)
+        DBC:UpdateUI()
+    end
+    
+    if not DBC.RareMobs then return end -- No data loaded
     
     -- Check if it's a known rare
     local rareName = DBC.RareMobs[npcID]
@@ -713,6 +723,36 @@ end
 
 function DBC:NAME_PLATE_UNIT_ADDED(unit)
     DBC:CheckForRareMob(unit)
+end
+
+function DBC:CHAT_MSG_SYSTEM(msg)
+    if not msg then return end
+    
+    -- Build pattern from global string (e.g. "%s has been reset.") to capture instance name
+    local pattern = string.gsub(INSTANCE_RESET_SUCCESS, "%%s", "(.*)")
+    local instanceName = string.match(msg, pattern)
+    
+    if instanceName then
+        local norm = NormalizeName(instanceName)
+        local key = DBC.BossDB.instanceNameIndex[norm]
+        
+        if key then
+            DBC:Debug("Instance reset detected for: " .. key)
+            if DBC.DB.activeRuns then
+                DBC.DB.activeRuns[key] = nil
+            end
+            
+            -- If we are currently viewing this instance, force a refresh to "empty" state
+            -- Note: We don't nullify CurrentInstanceKey because we are likely still in/near it,
+            -- just the Run context is gone.
+            if DBC.CurrentInstanceKey == key then
+                DBC.CurrentInstanceID = nil
+                DBC.CurrentRun = nil
+                DBC:EnsureRunContext(key, nil) -- Will now create a fresh pending run
+                DBC:UpdateUI()
+            end
+        end
+    end
 end
 
 -- =========================================================================
