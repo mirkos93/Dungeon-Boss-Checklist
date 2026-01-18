@@ -367,9 +367,14 @@ function DBC:GetBossLoot(boss)
         if match then
             -- Found the raw entry, return the loot table (usually under a difficulty key like NORMAL_DIFF)
             -- We'll try to find the first table that looks like a loot list
+            -- HEURISTIC: Loot tables contains list of items: { {1, 1234}, {2, 5678} }
+            -- DisplayIDs is: { {1234} } -> only 1 element
             for k, v in pairs(item) do
                 if type(v) == "table" and #v > 0 and type(v[1]) == "table" and v[1][1] then
-                    return v -- Return the first loot list found
+                    -- Ensure it's a loot entry (has at least index and ID)
+                    if #v[1] >= 2 then
+                        return v -- Return the first loot list found
+                    end
                 end
             end
         end

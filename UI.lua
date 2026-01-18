@@ -12,12 +12,16 @@ function DBC:InitUI()
     local f = CreateFrame("Frame", "DungeonBossChecklistFrame", UIParent, "BackdropTemplate")
     f:SetSize(MAIN_WIDTH, (MAX_VISIBLE_ROWS * ROW_HEIGHT) + 40)
     f:SetPoint(DBC.DB.ui.point, UIParent, DBC.DB.ui.relativePoint, DBC.DB.ui.x, DBC.DB.ui.y)
+    
+    -- Solid Background with softer borders (#021A32)
     f:SetBackdrop({
-        bgFile = "Interface\DialogFrame\UI-DialogBox-Background",
-        edgeFile = "Interface\DialogFrame\UI-DialogFrame-Border",
-        tile = true, tileSize = 32, edgeSize = 16,
+        bgFile = "Interface\\Buttons\\WHITE8x8", -- Solid texture
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", -- Softer border
+        tile = false, tileSize = 16, edgeSize = 16,
         insets = { left = 4, right = 4, top = 4, bottom = 4 }
     })
+    f:SetBackdropColor(0.008, 0.102, 0.196, 1) -- Solid Deep Blue #021A32
+    f:SetBackdropBorderColor(0.6, 0.6, 0.6, 1) -- Grey Border
     
     -- Movable
     f:SetMovable(true)
@@ -42,16 +46,16 @@ function DBC:InitUI()
     
     -- Title
     f.Title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.Title:SetPoint("TOP", 10, -8) -- Shifted slightly to the right to make room for icon
+    f.Title:SetPoint("TOP", 10, -8)
     f.Title:SetText("DBC")
     
-    -- Addon Icon in UI
+    -- Addon Icon
     f.HeaderIcon = f:CreateTexture(nil, "OVERLAY")
     f.HeaderIcon:SetSize(20, 20)
     f.HeaderIcon:SetPoint("RIGHT", f.Title, "LEFT", -5, 0)
     f.HeaderIcon:SetTexture("Interface\\AddOns\\DungeonBossChecklist\\icon.png")
     
-    -- Subtitle (Instance Info)
+    -- Subtitle
     f.Info = f:CreateFontString(nil, "OVERLAY", "GameFontWhiteSmall")
     f.Info:SetPoint("TOP", 0, -22)
     f.Info:SetText("No Instance")
@@ -60,9 +64,10 @@ function DBC:InitUI()
     local btnCompact = CreateFrame("Button", nil, f)
     btnCompact:SetSize(16, 16)
     btnCompact:SetPoint("TOPRIGHT", -8, -8)
-    btnCompact:SetNormalTexture("Interface\Buttons\UI-Panel-CollapseButton-Up")
-    btnCompact:SetPushedTexture("Interface\Buttons\UI-Panel-CollapseButton-Down")
-    btnCompact:SetHighlightTexture("Interface\Buttons\UI-Panel-MinimizeButton-Highlight")
+    btnCompact:SetFrameLevel(f:GetFrameLevel() + 10) -- Force on top
+    btnCompact:SetNormalTexture("Interface\\Buttons\\UI-Panel-CollapseButton-Up")
+    btnCompact:SetPushedTexture("Interface\\Buttons\\UI-Panel-CollapseButton-Down")
+    btnCompact:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
     btnCompact:SetScript("OnClick", function()
         DBC.DB.ui.compact = not DBC.DB.ui.compact
         DBC:UpdateUI()
@@ -73,7 +78,8 @@ function DBC:InitUI()
     local btnAnnounce = CreateFrame("Button", nil, f)
     btnAnnounce:SetSize(16, 16)
     btnAnnounce:SetPoint("TOPRIGHT", btnCompact, "TOPLEFT", -2, 0)
-    btnAnnounce:SetNormalTexture("Interface\Buttons\UI-GuildButton-PublicNote-Up")
+    btnAnnounce:SetFrameLevel(f:GetFrameLevel() + 10) -- Force on top
+    btnAnnounce:SetNormalTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
     btnAnnounce:SetScript("OnClick", function()
         DBC:AnnounceRemaining()
     end)
@@ -86,13 +92,46 @@ function DBC:InitUI()
     f.BtnAnnounce = btnAnnounce
 
     -- ScrollFrame
-    f.Scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    f.Scroll = CreateFrame("ScrollFrame", "DungeonBossChecklistScrollFrame", f, "UIPanelScrollFrameTemplate")
     f.Scroll:SetPoint("TOPLEFT", 10, -40)
     f.Scroll:SetPoint("BOTTOMRIGHT", -30, 10)
     
+    -- Enable Mouse Wheel Scrolling
+    f.Scroll:EnableMouseWheel(true)
+    f.Scroll:SetScript("OnMouseWheel", function(self, delta)
+        local current = self:GetVerticalScroll()
+        local maxScroll = self:GetVerticalScrollRange()
+        local step = 20
+        local newScroll = current - (delta * step)
+        if newScroll < 0 then newScroll = 0 end
+        if newScroll > maxScroll then newScroll = maxScroll end
+        self:SetVerticalScroll(newScroll)
+    end)
+    
+    -- Auto-hide ScrollBar via OnScrollRangeChanged
+    f.Scroll:SetScript("OnScrollRangeChanged", function(self, xrange, yrange)
+        local scrollBar = self.ScrollBar or _G[self:GetName().."ScrollBar"]
+        local scrollUp = _G[self:GetName().."ScrollBarScrollUpButton"]
+        local scrollDown = _G[self:GetName().."ScrollBarScrollDownButton"]
+        
+        if not yrange or yrange < 0.1 then
+            if scrollBar then scrollBar:Hide() end
+            if scrollUp then scrollUp:Hide() end
+            if scrollDown then scrollDown:Hide() end
+            self:SetPoint("BOTTOMRIGHT", -10, 10)
+            DBC.UIFrame.Content:SetWidth(MAIN_WIDTH - 20)
+        else
+            if scrollBar then scrollBar:Show() end
+            if scrollUp then scrollUp:Show() end
+            if scrollDown then scrollDown:Show() end
+            self:SetPoint("BOTTOMRIGHT", -30, 10)
+            DBC.UIFrame.Content:SetWidth(MAIN_WIDTH - 40)
+        end
+    end)
+    
     -- Content Container
     f.Content = CreateFrame("Frame", nil, f.Scroll)
-    f.Content:SetSize(MAIN_WIDTH - 40, 1) -- Height updated dynamically
+    f.Content:SetSize(MAIN_WIDTH - 40, 1)
     f.Scroll:SetScrollChild(f.Content)
     
     f.Checkboxes = {}
@@ -100,6 +139,8 @@ function DBC:InitUI()
     
     DBC.UIFrame = f
     
+    DBC:InitLootWindow()
+
     -- Commands
     SLASH_DBC1 = "/dbc"
     SlashCmdList["DBC"] = function(msg)
@@ -141,26 +182,235 @@ function DBC:InitUI()
     DBC:UpdateUI()
 end
 
+function DBC:InitLootWindow()
+    local f = CreateFrame("Frame", "DBC_LootFrame", UIParent, "BackdropTemplate")
+    f:SetSize(220, 300)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("DIALOG")
+    f:EnableMouse(true)
+    f:SetMovable(true)
+    f:SetClampedToScreen(true)
+    f:Hide()
+    
+    f:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogFrame-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+    
+    f:SetScript("OnMouseDown", function(self) self:StartMoving() end)
+    f:SetScript("OnMouseUp", function(self) self:StopMovingOrSizing() end)
+    
+    -- Close Button
+    local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", -5, -5)
+    
+    -- Title
+    f.Title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.Title:SetPoint("TOP", 0, -15)
+    f.Title:SetText("Loot")
+    
+    -- Scroll
+    f.Scroll = CreateFrame("ScrollFrame", "DBC_LootScrollFrame", f, "UIPanelScrollFrameTemplate")
+    f.Scroll:SetPoint("TOPLEFT", 15, -40)
+    f.Scroll:SetPoint("BOTTOMRIGHT", -35, 15)
+
+    f.Scroll:SetScript("OnScrollRangeChanged", function(self, xrange, yrange)
+        local scrollBar = self.ScrollBar or _G[self:GetName().."ScrollBar"]
+        local scrollUp = _G[self:GetName().."ScrollBarScrollUpButton"]
+        local scrollDown = _G[self:GetName().."ScrollBarScrollDownButton"]
+
+        if not yrange or yrange < 0.1 then
+            if scrollBar then scrollBar:Hide() end
+            if scrollUp then scrollUp:Hide() end
+            if scrollDown then scrollDown:Hide() end
+            self:SetPoint("BOTTOMRIGHT", -15, 15)
+            DBC.LootFrame.Content:SetWidth(190)
+        else
+            if scrollBar then scrollBar:Show() end
+            if scrollUp then scrollUp:Show() end
+            if scrollDown then scrollDown:Show() end
+            self:SetPoint("BOTTOMRIGHT", -35, 15)
+            DBC.LootFrame.Content:SetWidth(180)
+        end
+    end)
+    
+    f.Content = CreateFrame("Frame", nil, f.Scroll)
+    f.Content:SetSize(180, 1)
+    f.Scroll:SetScrollChild(f.Content)
+    
+    f.Rows = {}
+    DBC.LootFrame = f
+end
+
+function DBC:ShowLootWindow(boss)
+    if not boss then return end
+    local lootTable = DBC:GetBossLoot(boss)
+    if not lootTable then 
+        print("[DBC] No loot data for " .. boss.name)
+        return 
+    end
+    
+    local f = DBC.LootFrame
+    f.Title:SetText(boss.name)
+    f:Show()
+    
+    -- Hide old rows
+    for _, r in pairs(f.Rows) do r:Hide() end
+    
+    local yOffset = 0
+    local rowIndex = 1
+    
+    for _, entry in ipairs(lootTable) do
+        local itemID = entry[2]
+        -- Only process numeric IDs (skip headers)
+        if type(itemID) == "number" then
+            local row = f.Rows[rowIndex]
+            if not row then
+                row = CreateFrame("Button", nil, f.Content)
+                row:SetSize(180, 36)
+                
+                row.Icon = row:CreateTexture(nil, "ARTWORK")
+                row.Icon:SetSize(32, 32)
+                row.Icon:SetPoint("LEFT", 0, 0)
+                
+                row.Name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                row.Name:SetPoint("LEFT", row.Icon, "RIGHT", 8, 0)
+                row.Name:SetPoint("RIGHT", 0, 0)
+                row.Name:SetJustifyH("LEFT")
+                row.Name:SetWordWrap(false)
+                
+                row:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetHyperlink(self.link or "item:"..self.itemID)
+                    GameTooltip:Show()
+                    CursorUpdate(self)
+                end)
+                row:SetScript("OnLeave", function(self)
+                    GameTooltip:Hide()
+                    ResetCursor()
+                end)
+                row:SetScript("OnClick", function(self)
+                    if not self.link then return end
+                    if IsModifiedClick("CHATLINK") then
+                        ChatEdit_InsertLink(self.link)
+                    elseif IsModifiedClick("DRESSUP") then
+                        DressUpItemLink(self.link)
+                    end
+                end)
+                
+                f.Rows[rowIndex] = row
+            end
+            
+            row:SetPoint("TOPLEFT", 0, yOffset)
+            row.itemID = itemID
+            
+            local name, link, quality, _, _, _, _, _, _, icon = GetItemInfo(itemID)
+            if name then
+                row.Name:SetText(name)
+                local r, g, b = GetItemQualityColor(quality or 1)
+                row.Name:SetTextColor(r, g, b)
+                row.Icon:SetTexture(icon)
+                row.link = link
+            else
+                row.Name:SetText("Loading item #" .. itemID)
+                row.Name:SetTextColor(0.5, 0.5, 0.5)
+                row.Icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+                row.link = nil
+                -- Trigger load
+                local item = Item:CreateFromItemID(itemID)
+                if item then
+                    item:ContinueOnItemLoad(function()
+                        if f:IsVisible() and row:IsVisible() and row.itemID == itemID then
+                            local n, l, q, _, _, _, _, _, _, i = GetItemInfo(itemID)
+                            row.Name:SetText(n)
+                            local r, g, b = GetItemQualityColor(q or 1)
+                            row.Name:SetTextColor(r, g, b)
+                            row.Icon:SetTexture(i)
+                            row.link = l
+                        end
+                    end)
+                end
+            end
+            
+            row:Show()
+            yOffset = yOffset - 38
+            rowIndex = rowIndex + 1
+        end
+    end
+    
+    local totalHeight = math.abs(yOffset)
+    f.Content:SetHeight(totalHeight)
+
+    f.Scroll:UpdateScrollChildRect()
+    local visibleHeight = f.Scroll:GetHeight() or 0
+    local needScroll = totalHeight > (visibleHeight + 1)
+    local scrollBar = f.Scroll.ScrollBar or _G[f.Scroll:GetName().."ScrollBar"]
+    local scrollUp = _G[f.Scroll:GetName().."ScrollBarScrollUpButton"]
+    local scrollDown = _G[f.Scroll:GetName().."ScrollBarScrollDownButton"]
+
+    if needScroll then
+        if scrollBar then scrollBar:Show() end
+        if scrollUp then scrollUp:Show() end
+        if scrollDown then scrollDown:Show() end
+        f.Scroll:SetPoint("BOTTOMRIGHT", -35, 15)
+        f.Content:SetWidth(180)
+    else
+        if scrollBar then scrollBar:Hide() end
+        if scrollUp then scrollUp:Hide() end
+        if scrollDown then scrollDown:Hide() end
+        f.Scroll:SetVerticalScroll(0)
+        f.Scroll:SetPoint("BOTTOMRIGHT", -15, 15)
+        f.Content:SetWidth(190)
+    end
+end
+
 function DBC:GetCheckbox(index)
     if not DBC.UIFrame.Checkboxes[index] then
         local cb = CreateFrame("Button", nil, DBC.UIFrame.Content)
         cb:SetSize(MAIN_WIDTH - 40, ROW_HEIGHT)
         
-        -- Icon (Skull/Check)
+        -- Checkbox Texture
+        cb.Check = cb:CreateTexture(nil, "ARTWORK")
+        cb.Check:SetSize(16, 16)
+        cb.Check:SetPoint("LEFT", 0, 0)
+        cb.Check:SetTexture("Interface\\Buttons\\UI-CheckBox-Up") 
+
+        -- Icon (Skull/Rare)
         cb.Icon = cb:CreateTexture(nil, "ARTWORK")
         cb.Icon:SetSize(14, 14)
-        cb.Icon:SetPoint("LEFT", 0, 0)
+        cb.Icon:SetPoint("LEFT", cb.Check, "RIGHT", 2, 0)
         
+        -- Loot Button (Bag)
+        cb.LootBtn = CreateFrame("Button", nil, cb)
+        cb.LootBtn:SetSize(14, 14)
+        cb.LootBtn:SetPoint("RIGHT", cb, "RIGHT", -2, 0)
+        cb.LootBtn:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Coin-Up")
+        cb.LootBtn:SetHighlightTexture("Interface\\Buttons\\UI-GroupLoot-Coin-Highlight")
+        cb.LootBtn:SetScript("OnClick", function(self)
+            local parent = self:GetParent()
+            if parent.bossData then
+                DBC:ShowLootWindow(parent.bossData)
+            end
+        end)
+        cb.LootBtn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("View Loot", 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        cb.LootBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
         -- Text
         cb.Text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightLeft")
         cb.Text:SetPoint("LEFT", cb.Icon, "RIGHT", 5, 0)
-        cb.Text:SetPoint("RIGHT", 0, 0)
+        cb.Text:SetPoint("RIGHT", cb.LootBtn, "LEFT", -5, 0) -- Anchor to LootBtn
         
         -- Quest Icon
         cb.QuestIcon = cb:CreateTexture(nil, "OVERLAY")
         cb.QuestIcon:SetSize(12, 12)
-        cb.QuestIcon:SetPoint("RIGHT", cb, "RIGHT", -2, 0)
-        cb.QuestIcon:SetTexture("Interface\GossipFrame\ActiveQuestIcon")
+        cb.QuestIcon:SetPoint("RIGHT", cb.LootBtn, "LEFT", -2, 0) -- Left of LootBtn
+        cb.QuestIcon:SetTexture("Interface\\GossipFrame\\ActiveQuestIcon")
         cb.QuestIcon:Hide()
 
         cb:SetScript("OnClick", function(self)
@@ -202,10 +452,6 @@ end
 
 function DBC:AnnounceRemaining()
     if not DBC.CurrentInstanceKey then return end
-    if not IsInGroup() then 
-        print("[DBC] Not in a group.")
-        return 
-    end
     
     local remaining = DBC:GetRemainingBossNamesWithFilter(DBC.CurrentInstanceKey, true)
     local msg
@@ -215,11 +461,20 @@ function DBC:AnnounceRemaining()
         local list = table.concat(remaining, ", ")
         msg = string.format("[DBC] Remaining: %s", list)
     end
-    SendChatMessage(msg, "PARTY")
+
+    if IsInGroup() then 
+        SendChatMessage(msg, "PARTY")
+    else
+        print(msg .. " (Solo Mode)")
+    end
 end
 
 function DBC:ShowBossTooltip(owner, instData, boss)
     if not boss or not instData then return end
+    
+    DBC.HoveredBoss = boss
+    DBC.HoveredInstData = instData
+    
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
     GameTooltip:SetText(boss.name, 1, 1, 1)
     
@@ -240,7 +495,6 @@ function DBC:ShowBossTooltip(owner, instData, boss)
                 break 
             end
             
-            -- Entry format in AtlasLoot data: { index, itemID/string, ... }
             local itemID = entry[2]
             if type(itemID) == "number" then
                 local name, link, quality = GetItemInfo(itemID)
@@ -248,7 +502,7 @@ function DBC:ShowBossTooltip(owner, instData, boss)
                     local r, g, b = GetItemQualityColor(quality or 1)
                     GameTooltip:AddLine(name, r, g, b)
                 else
-                    GameTooltip:AddLine("Item #"..itemID, 0.6, 0.6, 0.6)
+                    GameTooltip:AddLine("Loading item #"..itemID.."...", 0.5, 0.5, 0.5)
                 end
                 count = count + 1
             elseif type(itemID) == "string" and string.sub(itemID, 1, 3) == "INV" then
@@ -256,7 +510,7 @@ function DBC:ShowBossTooltip(owner, instData, boss)
             end
         end
         if count == 0 then
-            GameTooltip:AddLine("Retrieving item info...", 0.6, 0.6, 0.6)
+            GameTooltip:AddLine("No drops found.", 0.6, 0.6, 0.6)
         end
     else
         GameTooltip:AddLine("No loot data available.", 0.5, 0.5, 0.5)
@@ -266,6 +520,8 @@ function DBC:ShowBossTooltip(owner, instData, boss)
 end
 
 function DBC:HideBossTooltip()
+    DBC.HoveredBoss = nil
+    DBC.HoveredInstData = nil
     GameTooltip:Hide()
 end
 
@@ -303,11 +559,17 @@ function DBC:UpdateUI()
     if DBC.DB.ui.compact then
         DBC.UIFrame:SetHeight(50)
         DBC.UIFrame.Scroll:Hide()
-        DBC.UIFrame.BtnCompact:SetNormalTexture("Interface\Buttons\UI-Panel-ExpandButton-Up")
+        local scrollBar = DBC.UIFrame.Scroll.ScrollBar or _G[DBC.UIFrame.Scroll:GetName().."ScrollBar"]
+        local scrollUp = _G[DBC.UIFrame.Scroll:GetName().."ScrollBarScrollUpButton"]
+        local scrollDown = _G[DBC.UIFrame.Scroll:GetName().."ScrollBarScrollDownButton"]
+        if scrollBar then scrollBar:Hide() end
+        if scrollUp then scrollUp:Hide() end
+        if scrollDown then scrollDown:Hide() end
+        DBC.UIFrame.BtnCompact:SetNormalTexture("Interface\\Buttons\\UI-Panel-ExpandButton-Up")
         return
     else
         DBC.UIFrame.Scroll:Show()
-        DBC.UIFrame.BtnCompact:SetNormalTexture("Interface\Buttons\UI-Panel-CollapseButton-Up")
+        DBC.UIFrame.BtnCompact:SetNormalTexture("Interface\\Buttons\\UI-Panel-CollapseButton-Up")
     end
 
     local yOffset = 0
@@ -339,18 +601,22 @@ function DBC:UpdateUI()
         end
         cb.isKilled = isKilled
 
-        -- Icons
+        -- Icons & Checkbox State
         if isKilled then
-            cb.Icon:SetTexture("Interface\RaidFrame\ReadyCheck-Ready") -- Green check
+            cb.Check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
             cb.Text:SetTextColor(0.5, 0.5, 0.5)
+            cb.Icon:SetDesaturated(true)
         else
-            if boss.specialType == "rare" then
-                cb.Icon:SetTexture("Interface\Minimap\MiniMap-QuestArrow") -- Placeholder for Rare
-                cb.Icon:SetDesaturated(true)
-            else
-                cb.Icon:SetTexture("Interface\TargetingFrame\UI-TargetingFrame-Skull") -- Skull
-            end
+            cb.Check:SetTexture("Interface\\Buttons\\UI-CheckBox-Up")
             cb.Text:SetTextColor(1, 0.82, 0)
+            cb.Icon:SetDesaturated(false)
+        end
+
+        -- Boss Type Icon (Skull/Rare)
+        if boss.specialType == "rare" then
+            cb.Icon:SetTexture("Interface\\Minimap\\MiniMap-QuestArrow")
+        else
+            cb.Icon:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
         end
         
         -- Quest Check
@@ -393,7 +659,33 @@ function DBC:UpdateUI()
     local totalHeight = math.abs(yOffset)
     DBC.UIFrame.Content:SetHeight(totalHeight)
     
-    -- Auto-resize frame
+    -- Auto-resize frame (clamp to max rows)
     local frameHeight = math.min(totalHeight + 50, (MAX_VISIBLE_ROWS * ROW_HEIGHT) + 50)
     DBC.UIFrame:SetHeight(frameHeight)
+    
+    -- Force update scroll range
+    DBC.UIFrame.Scroll:UpdateScrollChildRect()
+
+    -- Force scrollbar visibility based on content height
+    local scroll = DBC.UIFrame.Scroll
+    local visibleHeight = scroll:GetHeight() or 0
+    local needScroll = totalHeight > (visibleHeight + 1)
+    local scrollBar = scroll.ScrollBar or _G[scroll:GetName().."ScrollBar"]
+    local scrollUp = _G[scroll:GetName().."ScrollBarScrollUpButton"]
+    local scrollDown = _G[scroll:GetName().."ScrollBarScrollDownButton"]
+
+    if needScroll then
+        if scrollBar then scrollBar:Show() end
+        if scrollUp then scrollUp:Show() end
+        if scrollDown then scrollDown:Show() end
+        scroll:SetPoint("BOTTOMRIGHT", -30, 10)
+        DBC.UIFrame.Content:SetWidth(MAIN_WIDTH - 40)
+    else
+        if scrollBar then scrollBar:Hide() end
+        if scrollUp then scrollUp:Hide() end
+        if scrollDown then scrollDown:Hide() end
+        scroll:SetVerticalScroll(0)
+        scroll:SetPoint("BOTTOMRIGHT", -10, 10)
+        DBC.UIFrame.Content:SetWidth(MAIN_WIDTH - 20)
+    end
 end
