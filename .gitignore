@@ -1,20 +1,21 @@
 # WoW Addon GitIgnore
 
-# Saved Variables (Local to player)
+# Saved Variables & Backups (Local to player)
 *.lua.bak
 *.txt
 SavedVariables/
 
-# Temporary files
+# Temporary & Log files
 *.tmp
 *.log
 
-# Python scripts used for database generation/extraction
-generate_coords.py
-generate_coords_v2.py
-extract_rarescanner.py
-extract_raremobs.py
+# Python Artifacts & Scripts
+__pycache__/
+*.pyc
 *.py
+
+# Data Sources (Too large for repo)
+QuestieClassicNpcDB.lua
 
 # OS generated files
 .DS_Store
@@ -24,3 +25,7 @@ extract_raremobs.py
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Editor directories
+.vscode/
+.idea/

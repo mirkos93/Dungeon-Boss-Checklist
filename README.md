@@ -12,7 +12,8 @@ Stop wondering *"Did we kill that optional boss?"* or *"Which boss drops that it
 
 *   **Automatic Detection:** The checklist appears automatically when you enter a supported dungeon/raid and hides when you leave.
 *   **Live Tracking:** Bosses are automatically marked as "Dead" (Checked) when killed.
-*   **Dynamic Rare Detection:** Encountered a rare spawn not on the list? Just target them! If they are a known rare, the addon will magically add them to your checklist on the fly.
+*   **Dynamic Rare Detection:** Known dungeon rares are automatically pre-loaded into your list upon entry. Encountered a surprise rare? Just target them or spot their nameplate nearby, and the addon will magically add them to your checklist.
+*   **Session Persistence:** Your progress is saved instantly. Disconnected, crashed, or need to `/reload`? Your checklist state will be restored exactly as you left it (active for up to 4 hours).
 *   **Loot Browser:** Click the bag icon next to any boss to open a dedicated window showing their loot table with full interactive tooltips (Shift-Click to link, Ctrl-Click to try on).
 *   **Quest Integration:** Bosses required for your active quests are highlighted in **Green** with a `[!]` icon.
 *   **Compact Mode:** Minimize the window to a tiny progress bar (e.g., "Maraudon: 4/8 Bosses") to save screen space.
@@ -55,7 +56,7 @@ The core data file `data.lua` contains the boss IDs, loot tables, and instance m
 This addon stands on the shoulders of giants. A massive thank you to:
 
 *   **AtlasLootClassic Team:** For the comprehensive `data.lua` database structure and loot tables. [GitHub](https://github.com/Hoizame/AtlasLootClassic)
-*   **RareScanner:** For the extensive database of rare mob IDs used for dynamic detection. [CurseForge](https://www.curseforge.com/wow/addons/rarescanner)
+*   **Questie Team:** For the massive database of NPC IDs used to power the dynamic rare detection. [GitHub](https://github.com/Questie/Questie)
 
 *   **License:** Please respect the original licenses of the data sources when redistributing.
 

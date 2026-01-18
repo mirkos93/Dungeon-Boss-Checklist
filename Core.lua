@@ -434,6 +434,26 @@ end
 function DBC:EnsureRunContext(instanceKey, instanceID)
     if not instanceKey then return end
 
+    -- 1. If we have a definitive ID, save it as the active run for this map
+    if instanceID then
+        DBC.DB.activeRuns = DBC.DB.activeRuns or {}
+        DBC.DB.activeRuns[instanceKey] = instanceID
+    end
+
+    -- 2. If no ID provided (e.g. login/reload), try to restore the last active one
+    if not instanceID then
+        local savedID = DBC.DB.activeRuns and DBC.DB.activeRuns[instanceKey]
+        if savedID then
+            local savedRun = DBC.DB.runs[tostring(savedID)]
+            -- Resume only if run exists and was active recently (e.g. < 4 hours) to avoid stale data
+            -- Classic dungeon clears can take time, 4 hours (14400s) is safe.
+            if savedRun and (time() - (savedRun.lastSeenAt or 0) < 14400) then
+                instanceID = savedID
+                DBC:Debug("Resuming persisted run: " .. instanceID)
+            end
+        end
+    end
+
     if instanceID then
         local runKey = tostring(instanceID)
         local run = DBC.DB.runs[runKey]
@@ -704,6 +724,7 @@ function DBC:ADDON_LOADED(name)
     -- Init SavedVars
     DungeonBossChecklistDB = DungeonBossChecklistDB or {
         runs = {},
+        activeRuns = {}, -- Maps instanceKey -> last known numeric instanceID
         ui = { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0, shown = true },
         options = {
             enablePartyLog = true,
@@ -719,6 +740,7 @@ function DBC:ADDON_LOADED(name)
     }
     DBC.DB = DungeonBossChecklistDB
 
+    if not DBC.DB.activeRuns then DBC.DB.activeRuns = {} end
     if DBC.DB.options.enablePartyLog == nil then DBC.DB.options.enablePartyLog = true end
     if DBC.DB.options.partyLogIncludeSpecial == nil then DBC.DB.options.partyLogIncludeSpecial = true end
     if DBC.DB.options.showSpecialBosses == nil then DBC.DB.options.showSpecialBosses = true end
@@ -738,6 +760,35 @@ function DBC:ADDON_LOADED(name)
     DBC:InitOptions()
     
     print("|cff00ff00[DBC]|r loaded. Type /dbc for options.")
+end
+
+function DBC:InjectDungeonRares(instanceKey, mapID)
+    if not instanceKey or not mapID or not DBC.DungeonRares then return end
+    
+    local rares = DBC.DungeonRares[mapID]
+    if not rares then return end
+    
+    local instData = DBC.BossDB.instances[instanceKey]
+    if not instData then return end
+    
+    for _, rare in ipairs(rares) do
+        -- Check if already exists by ID to avoid duplicates
+        if not instData.bossByNpcId[rare.id] then
+            DBC:Debug("Injecting known rare: " .. rare.name .. " (" .. rare.id .. ")")
+            
+            local newBoss = {
+                index = #instData.bosses + 1,
+                npcId = rare.id,
+                name = rare.name,
+                optional = true,
+                specialType = "rare" -- Triggers rare icon in UI
+            }
+            
+            table.insert(instData.bosses, newBoss)
+            instData.bossByNpcId[rare.id] = newBoss
+            DBC.BossDB.npcToInstance[rare.id] = instanceKey
+        end
+    end
 end
 
 function DBC:UpdateContext()
@@ -780,6 +831,12 @@ function DBC:UpdateContext()
     DBC.CurrentInstanceKey = newKey
 
     if newKey then
+        -- Inject static rares using the MapID from our own DB (more reliable than C_Map inside dungeons)
+        local instData = DBC.BossDB.instances[newKey]
+        if instData and instData.mapId then
+            DBC:InjectDungeonRares(newKey, instData.mapId)
+        end
+
         if DBC.CurrentInstanceID and DBC.CurrentRun then
             DBC.CurrentRun.lastSeenAt = time()
         else
