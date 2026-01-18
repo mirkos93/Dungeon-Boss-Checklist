@@ -16,6 +16,7 @@ Stop wondering *"Did we kill that optional boss?"* or *"Which boss drops that it
 *   **Session Persistence:** Your progress is saved instantly. Disconnected, crashed, or need to `/reload`? Your checklist state will be restored exactly as you left it (active for up to 4 hours).
 *   **Loot Browser:** Click the bag icon next to any boss to open a dedicated window showing their loot table with full interactive tooltips (Shift-Click to link, Ctrl-Click to try on).
 *   **Quest Integration:** Bosses required for your active quests are highlighted in **Green** with a `[!]` icon.
+*   **Quick Reset:** One-click reset button in the checklist header (with confirmation).
 *   **Compact Mode:** Minimize the window to a tiny progress bar (e.g., "Maraudon: 4/8 Bosses") to save screen space.
 *   **Party Announce:** One-click button to announce remaining bosses to your party chat.
 *   **Smart Icons:** Skull icons for bosses, Green Checks for kills, and distinct markers for Rare/Optional encounters.
@@ -36,7 +37,6 @@ Stop wondering *"Did we kill that optional boss?"* or *"Which boss drops that it
 | `/dbc hide` | Force hide the window. |
 | `/dbc reset` | Reset the current dungeon progress (uncheck all bosses). |
 | `/dbc options` | Open the configuration panel. |
-| `/dbc status` | Print current progress to chat window. |
 
 ## 🤝 Contributing
 
