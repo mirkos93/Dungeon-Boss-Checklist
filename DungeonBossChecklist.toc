@@ -1,0 +1,16 @@
+## Interface: 11500
+## Title: Dungeon Boss Checklist
+## Notes: Tracks boss kills in 5-man dungeons per run.
+## Author: Gemini
+## Version: 1.0.0
+## IconTexture: Interface\AddOns\DungeonBossChecklist\icon.png
+## SavedVariables: DungeonBossChecklistDB
+
+lib/LibStub/LibStub.lua
+lib/CallbackHandler-1.0/CallbackHandler-1.0.lua
+
+Compat.lua
+data.lua
+Core.lua
+UI.lua
+Options.lua

@@ -1,0 +1,23 @@
+# WoW Addon GitIgnore
+
+# Saved Variables (Local to player)
+*.lua.bak
+*.txt
+SavedVariables/
+
+# Temporary files
+*.tmp
+*.log
+
+# Python scripts used for database generation/extraction
+generate_coords.py
+generate_coords_v2.py
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
