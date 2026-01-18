@@ -11,9 +11,9 @@ Stop wondering *"Did we kill that optional boss?"* or *"Which boss drops that it
 ## ✨ Key Features
 
 *   **Automatic Detection:** The checklist appears automatically when you enter a supported dungeon/raid and hides when you leave.
-*   **Live Tracking:** Bosses are automatically marked as "Dead" (Greyed out) when killed.
+*   **Live Tracking:** Bosses are automatically marked as "Dead" (Checked) when killed.
+*   **Loot Browser:** Click the bag icon next to any boss to open a dedicated window showing their loot table with full interactive tooltips (Shift-Click to link, Ctrl-Click to try on).
 *   **Quest Integration:** Bosses required for your active quests are highlighted in **Green** with a `[!]` icon.
-*   **Loot Tooltips:** Hover over any boss name to see a quick list of their notable drops (no need to open AtlasLoot separately!).
 *   **Compact Mode:** Minimize the window to a tiny progress bar (e.g., "Maraudon: 4/8 Bosses") to save screen space.
 *   **Party Announce:** One-click button to announce remaining bosses to your party chat.
 *   **Smart Icons:** Skull icons for bosses, Green Checks for kills, and distinct markers for Rare/Optional encounters.
@@ -48,7 +48,6 @@ Contributions are welcome! If you find a bug or want to improve the data:
 ### Updating Boss Data
 The core data file `data.lua` contains the boss IDs, loot tables, and instance mapping.
 *   **Missing Boss?** Add their `npcID` to the relevant section in `data.lua`.
-*   **Wrong Map?** Coordinates and logical mapping are handled in `BossCoords.lua` (if present) or internal logic.
 
 ## 📢 Credits & Data Source
 
