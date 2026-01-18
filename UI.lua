@@ -7,6 +7,31 @@ local ROW_HEIGHT = 20
 local HEADER_HEIGHT = 16
 local MAX_VISIBLE_ROWS = 12
 
+function DBC:ConfirmResetChecklist()
+    if not StaticPopupDialogs["DBC_RESET_CHECKLIST"] then
+        StaticPopupDialogs["DBC_RESET_CHECKLIST"] = {
+            text = "Reset this dungeon checklist?",
+            button1 = "Reset",
+            button2 = "Cancel",
+            OnAccept = function()
+                if DBC.CurrentInstanceKey then
+                    local ok = DBC:ResetChecklist(DBC.CurrentInstanceKey)
+                    if ok then
+                        print("[DBC] Run reset.")
+                    end
+                else
+                    print("[DBC] No active run to reset.")
+                end
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3
+        }
+    end
+    StaticPopup_Show("DBC_RESET_CHECKLIST")
+end
+
 function DBC:InitUI()
     -- Main Frame
     local f = CreateFrame("Frame", "DungeonBossChecklistFrame", UIParent, "BackdropTemplate")
@@ -91,6 +116,24 @@ function DBC:InitUI()
     btnAnnounce:SetScript("OnLeave", function() GameTooltip:Hide() end)
     f.BtnAnnounce = btnAnnounce
 
+    -- Reset Checklist Button
+    local btnReset = CreateFrame("Button", nil, f)
+    btnReset:SetSize(16, 16)
+    btnReset:SetPoint("TOPRIGHT", btnAnnounce, "TOPLEFT", -2, 0)
+    btnReset:SetFrameLevel(f:GetFrameLevel() + 10)
+    btnReset:SetNormalTexture("Interface\\Buttons\\UI-RefreshButton")
+    btnReset:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
+    btnReset:SetScript("OnClick", function()
+        DBC:ConfirmResetChecklist()
+    end)
+    btnReset:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Reset Checklist")
+        GameTooltip:Show()
+    end)
+    btnReset:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    f.BtnReset = btnReset
+
     -- ScrollFrame
     f.Scroll = CreateFrame("ScrollFrame", "DungeonBossChecklistScrollFrame", f, "UIPanelScrollFrameTemplate")
     f.Scroll:SetPoint("TOPLEFT", 10, -40)
@@ -152,13 +195,13 @@ function DBC:InitUI()
             DBC.DB.ui.shown = false
             DBC:UpdateUI()
         elseif cmd == "reset" then
-            if DBC.CurrentInstanceKey and not DBC.CurrentRun then
-                DBC:EnsureRunContext(DBC.CurrentInstanceKey, nil)
-            end
-            if DBC.CurrentRun then
-                DBC.CurrentRun.killed = {}
-                DBC:UpdateUI()
-                print("[DBC] Run reset.")
+            if DBC.CurrentInstanceKey then
+                local ok = DBC:ResetChecklist(DBC.CurrentInstanceKey)
+                if ok then
+                    print("[DBC] Run reset.")
+                end
+            else
+                print("[DBC] No active run to reset.")
             end
         elseif cmd == "options" then
             if DBC.OptionsFrame then InterfaceOptionsFrame_OpenToCategory(DBC.OptionsFrame) end
@@ -170,8 +213,98 @@ function DBC:InitUI()
             DBC.DB.options.debug = false
             print("[DBC] Debug OFF")
             DBC:UpdateUI()
+        elseif cmd == "resetui" then
+            DBC.UIFrame:ClearAllPoints()
+            DBC.UIFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            DBC.DB.ui.point = "CENTER"
+            DBC.DB.ui.relativePoint = "CENTER"
+            DBC.DB.ui.x = 0
+            DBC.DB.ui.y = 0
+            DBC.DB.ui.shown = true
+            DBC.DB.ui.compact = false
+            DBC:UpdateUI()
+            print("[DBC] UI Reset to center.")
         elseif cmd == "prune" then
             DBC:PruneOldRuns(true)
+        elseif cmd == "loc" then
+            if SetMapToCurrentZone then
+                SetMapToCurrentZone()
+            end
+            local mapID = (C_Map and C_Map.GetBestMapForUnit) and C_Map.GetBestMapForUnit("player") or nil
+            local x, y, z, instanceID = UnitPosition("player")
+            print(string.format("[DBC] MapID: %s | InstanceID: %s", tostring(mapID), tostring(instanceID)))
+            if x and y and z then
+                print(string.format("[DBC] World Position: X=%.2f, Y=%.2f, Z=%.2f", x, y, z))
+            else
+                print(string.format("[DBC] World Position: X=%s, Y=%s, Z=%s", tostring(x), tostring(y), tostring(z)))
+            end
+
+            if C_Map and C_Map.GetPlayerMapPosition and mapID then
+                local pos = C_Map.GetPlayerMapPosition(mapID, "player")
+                local mx, my = nil, nil
+                if pos and type(pos.GetXY) == "function" then
+                    mx, my = pos:GetXY()
+                elseif pos and pos.x and pos.y then
+                    mx, my = pos.x, pos.y
+                end
+                if mx and my then
+                    print(string.format("[DBC] Map Position: X=%.4f, Y=%.4f", mx, my))
+                else
+                    print("[DBC] Map Position: nil")
+                end
+
+                if C_Map.GetWorldPosFromMapPos and pos then
+                    local worldPos = C_Map.GetWorldPosFromMapPos(mapID, pos)
+                    local wx, wy = nil, nil
+                    if worldPos and type(worldPos.GetXY) == "function" then
+                        wx, wy = worldPos:GetXY()
+                    elseif worldPos and worldPos.x and worldPos.y then
+                        wx, wy = worldPos.x, worldPos.y
+                    end
+                    print(string.format("[DBC] World From Map: X=%s, Y=%s", tostring(wx), tostring(wy)))
+                end
+            end
+
+            if DBC.CurrentInstanceKey and DBC.BossDB and DBC.BossDB.instances then
+                local instData = DBC.BossDB.instances[DBC.CurrentInstanceKey]
+                if instData and C_Map and C_Map.GetPlayerMapPosition then
+                    local candidates = { instData.mapId, instData.instanceId, DBC.CurrentInstanceID }
+                    for _, id in ipairs(candidates) do
+                        if id then
+                            if SetMapByID then
+                                SetMapByID(tonumber(id))
+                            end
+                            local p = C_Map.GetPlayerMapPosition(tonumber(id), "player")
+                            local mx, my = nil, nil
+                            if p and type(p.GetXY) == "function" then
+                                mx, my = p:GetXY()
+                            elseif p and p.x and p.y then
+                                mx, my = p.x, p.y
+                            end
+                            print(string.format("[DBC] MapPos(%s): X=%s, Y=%s", tostring(id), tostring(mx), tostring(my)))
+                        end
+                    end
+                end
+            end
+
+            if GetPlayerMapPosition then
+                local candidates = {}
+                if DBC.CurrentInstanceKey and DBC.BossDB and DBC.BossDB.instances then
+                    local instData = DBC.BossDB.instances[DBC.CurrentInstanceKey]
+                    if instData then
+                        table.insert(candidates, instData.mapId)
+                        table.insert(candidates, instData.instanceId)
+                    end
+                end
+                table.insert(candidates, DBC.CurrentInstanceID)
+                for _, id in ipairs(candidates) do
+                    if id and SetMapByID then
+                        SetMapByID(tonumber(id))
+                    end
+                    local mx, my = GetPlayerMapPosition("player")
+                    print(string.format("[DBC] Legacy MapPos(%s): X=%s, Y=%s", tostring(id), tostring(mx), tostring(my)))
+                end
+            end
         else
             -- Toggle
             DBC.DB.ui.shown = not DBC.DB.ui.shown
@@ -401,36 +534,15 @@ function DBC:GetCheckbox(index)
         end)
         cb.LootBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-        -- Map Button (Pin)
-        cb.MapBtn = CreateFrame("Button", nil, cb)
-        cb.MapBtn:SetSize(14, 14)
-        cb.MapBtn:SetPoint("RIGHT", cb.LootBtn, "LEFT", -2, 0)
-        cb.MapBtn:SetNormalTexture("Interface\\Icons\\INV_Misc_Map02")
-        cb.MapBtn:GetNormalTexture():SetTexCoord(0.1, 0.9, 0.1, 0.9) -- Zoom icon
-        cb.MapBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
-        cb.MapBtn:SetScript("OnEnter", function(self)
-            if self.coords then
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText("Location", 1, 1, 1)
-                GameTooltip:AddLine(string.format("Coords: %d, %d", self.coords[1], self.coords[2]), 1, 0.82, 0)
-                if self.coords[3] then
-                    GameTooltip:AddLine(self.coords[3], 0.8, 0.8, 0.8, true)
-                end
-                GameTooltip:Show()
-            end
-        end)
-        cb.MapBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-        cb.MapBtn:Hide()
-
         -- Text
         cb.Text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightLeft")
         cb.Text:SetPoint("LEFT", cb.Icon, "RIGHT", 5, 0)
-        cb.Text:SetPoint("RIGHT", cb.MapBtn, "LEFT", -2, 0) -- Anchor to MapBtn area
+        cb.Text:SetPoint("RIGHT", cb.LootBtn, "LEFT", -2, 0) -- Anchor to LootBtn area
         
         -- Quest Icon
         cb.QuestIcon = cb:CreateTexture(nil, "OVERLAY")
         cb.QuestIcon:SetSize(12, 12)
-        cb.QuestIcon:SetPoint("RIGHT", cb.MapBtn, "LEFT", -2, 0) -- Left of MapBtn
+        cb.QuestIcon:SetPoint("RIGHT", cb.LootBtn, "LEFT", -2, 0) -- Left of LootBtn
 
         cb.QuestIcon:SetTexture("Interface\\GossipFrame\\ActiveQuestIcon")
         cb.QuestIcon:Hide()
@@ -623,21 +735,24 @@ function DBC:UpdateUI()
         end
         cb.isKilled = isKilled
 
-        -- Coordinates Logic
-        local coords = nil
-        if DBC.BossCoordinates and instData.mapId and DBC.BossCoordinates[instData.mapId] then
-            coords = DBC.BossCoordinates[instData.mapId][boss.npcId]
+        -- Loot Button visibility
+        local hasLoot = DBC:GetBossLoot(boss) ~= nil
+        if hasLoot then
+            cb.LootBtn:Show()
+        else
+            cb.LootBtn:Hide()
         end
 
-        if coords then
-            cb.MapBtn.coords = coords
-            cb.MapBtn:Show()
-            cb.Text:SetPoint("RIGHT", cb.MapBtn, "LEFT", -2, 0)
-            cb.QuestIcon:SetPoint("RIGHT", cb.MapBtn, "LEFT", -2, 0)
-        else
-            cb.MapBtn:Hide()
+        cb.Text:ClearAllPoints()
+        cb.Text:SetPoint("LEFT", cb.Icon, "RIGHT", 5, 0)
+        cb.QuestIcon:ClearAllPoints()
+
+        if hasLoot then
             cb.Text:SetPoint("RIGHT", cb.LootBtn, "LEFT", -5, 0)
             cb.QuestIcon:SetPoint("RIGHT", cb.LootBtn, "LEFT", -2, 0)
+        else
+            cb.Text:SetPoint("RIGHT", cb, "RIGHT", -5, 0)
+            cb.QuestIcon:SetPoint("RIGHT", cb, "RIGHT", -2, 0)
         end
 
         -- Icons & Checkbox State

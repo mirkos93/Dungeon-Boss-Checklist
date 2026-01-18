@@ -2,7 +2,7 @@
 ## Title: Dungeon Boss Checklist
 ## Notes: Tracks boss kills in 5-man dungeons per run.
 ## Author: Gemini
-## Version: 1.0.0
+## Version: 1.0.1
 ## IconTexture: Interface\AddOns\DungeonBossChecklist\icon.png
 ## SavedVariables: DungeonBossChecklistDB
 

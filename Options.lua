@@ -61,10 +61,11 @@ function DBC:InitOptions()
     btnReset:SetPoint("TOPLEFT", cbDebug, "BOTTOMLEFT", 0, -20)
     btnReset:SetText("Reset Current Run")
     btnReset:SetScript("OnClick", function() 
-        if DBC.CurrentRun then
-            DBC.CurrentRun.killed = {}
-            DBC:UpdateUI()
-            print("[DBC] Run reset manually via options.")
+        if DBC.CurrentInstanceKey then
+            local ok = DBC:ResetChecklist(DBC.CurrentInstanceKey)
+            if ok then
+                print("[DBC] Run reset manually via options.")
+            end
         else
             print("[DBC] No active run to reset.")
         end

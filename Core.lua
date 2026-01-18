@@ -15,6 +15,12 @@ DBC.BossDB = {
 -- Constants
 local KEEP_RUNS_DAYS = 14
 
+-- Manual mapping for instances where GetInstanceInfo IDs fail or names mismatch data.lua
+local INSTANCE_NAME_FIXES = {
+    ["stormwindstockade"] = "TheStockade",
+    ["stockade"] = "TheStockade",
+}
+
 local function NormalizeName(name)
     if not name then return nil end
     local s = string.lower(tostring(name))
@@ -473,6 +479,16 @@ function DBC:EnsureRunContext(instanceKey, instanceID)
             DBC:Debug("New run detected: " .. runKey .. " (" .. instanceKey .. ")")
         end
 
+        -- If a reset was detected after this run started, wipe progress
+        if DBC.DB.lastResetByInstance and DBC.DB.lastResetByInstance[instanceKey] then
+            local resetAt = DBC.DB.lastResetByInstance[instanceKey]
+            if resetAt and run.startedAt and run.startedAt < resetAt then
+                run = { instanceName = instanceKey, startedAt = time(), killed = {} }
+                DBC.DB.runs[runKey] = run
+                DBC:Debug("Run reset applied for " .. instanceKey)
+            end
+        end
+
         run.lastSeenAt = time()
         DBC.CurrentRun = run
         DBC.CurrentInstanceID = runKey
@@ -485,6 +501,17 @@ function DBC:EnsureRunContext(instanceKey, instanceID)
             DBC.DB.runs[pendingKey] = run
             DBC:Debug("Pending run created for " .. instanceKey)
         end
+
+        if DBC.DB.lastResetByInstance and DBC.DB.lastResetByInstance[instanceKey] then
+            local resetAt = DBC.DB.lastResetByInstance[instanceKey]
+            if resetAt and run.startedAt and run.startedAt < resetAt then
+                run.killed = {}
+                run.startedAt = time()
+                run.pending = true
+                DBC:Debug("Pending run reset applied for " .. instanceKey)
+            end
+        end
+
         run.lastSeenAt = time()
         DBC.CurrentRun = run
         DBC.CurrentInstanceID = nil
@@ -664,6 +691,65 @@ function DBC:PruneOldRuns(forceReport)
     end
 end
 
+function DBC:ResetRunsForInstance(instanceKey)
+    if not instanceKey or not DBC.DB or not DBC.DB.runs then return end
+
+    if DBC.DB.activeRuns then
+        DBC.DB.activeRuns[instanceKey] = nil
+    end
+
+    local pendingKey = DBC:GetPendingRunKey(instanceKey)
+    if DBC.DB.runs[pendingKey] then
+        DBC.DB.runs[pendingKey] = nil
+    end
+
+    for runKey, run in pairs(DBC.DB.runs) do
+        if run and run.instanceName == instanceKey then
+            DBC.DB.runs[runKey] = nil
+        end
+    end
+end
+
+function DBC:ResetAllRuns()
+    if not DBC.DB or not DBC.DB.runs then return end
+    local now = time()
+    DBC.DB.lastResetByInstance = DBC.DB.lastResetByInstance or {}
+    for _, run in pairs(DBC.DB.runs) do
+        if run and run.instanceName then
+            DBC.DB.lastResetByInstance[run.instanceName] = now
+        end
+    end
+
+    DBC.DB.runs = {}
+    DBC.DB.activeRuns = {}
+
+    if DBC.CurrentInstanceKey then
+        DBC.CurrentRun = nil
+        DBC.CurrentRunKey = nil
+        DBC.CurrentInstanceID = nil
+        DBC:EnsureRunContext(DBC.CurrentInstanceKey, nil)
+        DBC:UpdateUI()
+    end
+end
+
+function DBC:ResetChecklist(instanceKey)
+    if not instanceKey or not DBC.DB then return false end
+    DBC.DB.lastResetByInstance = DBC.DB.lastResetByInstance or {}
+    DBC.DB.lastResetByInstance[instanceKey] = time()
+
+    DBC:ResetRunsForInstance(instanceKey)
+
+    if DBC.CurrentInstanceKey == instanceKey then
+        DBC.CurrentRun = nil
+        DBC.CurrentRunKey = nil
+        DBC.CurrentInstanceID = nil
+        DBC:EnsureRunContext(instanceKey, nil)
+        DBC:UpdateUI()
+    end
+
+    return true
+end
+
 -- =========================================================================
 -- DYNAMIC RARE MOB DETECTION
 -- =========================================================================
@@ -729,28 +815,35 @@ function DBC:CHAT_MSG_SYSTEM(msg)
     if not msg then return end
     
     -- Build pattern from global string (e.g. "%s has been reset.") to capture instance name
-    local pattern = string.gsub(INSTANCE_RESET_SUCCESS, "%%s", "(.*)")
-    local instanceName = string.match(msg, pattern)
+    local instanceName = nil
+    local pattern = nil
+    if INSTANCE_RESET_SUCCESS and string.find(INSTANCE_RESET_SUCCESS, "%%s", 1, true) then
+        pattern = string.gsub(INSTANCE_RESET_SUCCESS, "%%s", "(.*)")
+        instanceName = string.match(msg, pattern)
+    elseif INSTANCE_RESET_SUCCESS and INSTANCE_RESET_SUCCESS ~= "" then
+        if msg == INSTANCE_RESET_SUCCESS or string.find(msg, INSTANCE_RESET_SUCCESS, 1, true) then
+            instanceName = "__ALL__"
+        end
+    end
     
     if instanceName then
+        if instanceName == "__ALL__" then
+            DBC:Debug("Global instance reset detected.")
+            DBC:ResetAllRuns()
+            return
+        end
+
         local norm = NormalizeName(instanceName)
         local key = DBC.BossDB.instanceNameIndex[norm]
         
+        if not key and DBC.CurrentInstanceKey then
+            -- Fallback for locale mismatch in instance name
+            key = DBC.CurrentInstanceKey
+        end
+
         if key then
             DBC:Debug("Instance reset detected for: " .. key)
-            if DBC.DB.activeRuns then
-                DBC.DB.activeRuns[key] = nil
-            end
-            
-            -- If we are currently viewing this instance, force a refresh to "empty" state
-            -- Note: We don't nullify CurrentInstanceKey because we are likely still in/near it,
-            -- just the Run context is gone.
-            if DBC.CurrentInstanceKey == key then
-                DBC.CurrentInstanceID = nil
-                DBC.CurrentRun = nil
-                DBC:EnsureRunContext(key, nil) -- Will now create a fresh pending run
-                DBC:UpdateUI()
-            end
+            DBC:ResetChecklist(key)
         end
     end
 end
@@ -765,6 +858,7 @@ function DBC:ADDON_LOADED(name)
     DungeonBossChecklistDB = DungeonBossChecklistDB or {
         runs = {},
         activeRuns = {}, -- Maps instanceKey -> last known numeric instanceID
+        lastResetByInstance = {},
         ui = { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0, shown = true },
         options = {
             enablePartyLog = true,
@@ -781,6 +875,7 @@ function DBC:ADDON_LOADED(name)
     DBC.DB = DungeonBossChecklistDB
 
     if not DBC.DB.activeRuns then DBC.DB.activeRuns = {} end
+    if not DBC.DB.lastResetByInstance then DBC.DB.lastResetByInstance = {} end
     if DBC.DB.options.enablePartyLog == nil then DBC.DB.options.enablePartyLog = true end
     if DBC.DB.options.partyLogIncludeSpecial == nil then DBC.DB.options.partyLogIncludeSpecial = true end
     if DBC.DB.options.showSpecialBosses == nil then DBC.DB.options.showSpecialBosses = true end
@@ -792,6 +887,14 @@ function DBC:ADDON_LOADED(name)
     local tocVersion = GetAddOnMetadata and GetAddOnMetadata(addonName, "Version")
     if tocVersion and tocVersion ~= "" then
         DBC.DB.options.version = tocVersion
+    end
+
+    if ResetInstances and not DBC._resetHooked then
+        hooksecurefunc("ResetInstances", function()
+            DBC:Debug("ResetInstances() called.")
+            DBC:ResetAllRuns()
+        end)
+        DBC._resetHooked = true
     end
     
     DBC:BuildBossDB()
@@ -842,6 +945,8 @@ function DBC:UpdateContext()
     end
 
     local name, _, _, _, _, _, _, instanceIdOrMapId, _, lfgDungeonID = GetInstanceInfo()
+    DBC:Debug("Name='"..tostring(name).."' InstID="..tostring(instanceIdOrMapId))
+    
     local newKey = nil
     local instanceToken = instanceIdOrMapId
     local instanceTokenNum = instanceToken and tonumber(instanceToken) or nil
@@ -858,6 +963,8 @@ function DBC:UpdateContext()
         local normName = NormalizeName(name)
         if normName and DBC.BossDB.instanceNameIndex[normName] then
             newKey = DBC.BossDB.instanceNameIndex[normName]
+        elseif normName and INSTANCE_NAME_FIXES[normName] then
+            newKey = INSTANCE_NAME_FIXES[normName]
         end
     end
 
@@ -871,18 +978,44 @@ function DBC:UpdateContext()
     DBC.CurrentInstanceKey = newKey
 
     if newKey then
-        -- Inject static rares using the MapID from our own DB (more reliable than C_Map inside dungeons)
+        local changed = (DBC.CurrentInstanceKey ~= newKey)
+        DBC.CurrentInstanceKey = newKey
+        DBC.CurrentInstanceID = instanceTokenNum
+        
         local instData = DBC.BossDB.instances[newKey]
-        if instData and instData.mapId then
-            DBC:InjectDungeonRares(newKey, instData.mapId)
-        end
+        if instData then
+            local mapCandidates = {}
+            local mapList = {}
+            local function addCandidate(val)
+                local num = tonumber(val)
+                if num and not mapCandidates[num] then
+                    mapCandidates[num] = true
+                    table.insert(mapList, num)
+                end
+            end
 
-        if DBC.CurrentInstanceID and DBC.CurrentRun then
-            DBC.CurrentRun.lastSeenAt = time()
-        else
-            DBC:EnsureRunContext(newKey, nil)
+            addCandidate(instData.mapId)
+            addCandidate(instData.instanceId)
+            addCandidate(instanceTokenNum)
+
+            if C_Map and C_Map.GetBestMapForUnit then
+                addCandidate(C_Map.GetBestMapForUnit("player"))
+            end
+
+            for _, mapId in ipairs(mapList) do
+                DBC:InjectDungeonRares(newKey, mapId)
+            end
         end
-        DBC:Debug("Dungeon detected: " .. newKey)
+        
+        -- Always auto-show when entering/detecting a supported dungeon
+        DBC.DB.ui.shown = true
+        
+        DBC:EnsureRunContext(newKey, instanceTokenNum)
+        DBC:UpdateUI()
+        
+        if changed then
+            print("[DBC] Dungeon detected: " .. newKey)
+        end
     else
         DBC.CurrentInstanceID = nil
         DBC.CurrentRun = nil
