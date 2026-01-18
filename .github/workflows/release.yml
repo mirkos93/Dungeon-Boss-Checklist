@@ -56,3 +56,12 @@ jobs:
           generate_release_notes: true # Genera il changelog automaticamente dai commit
           draft: false
           prerelease: false
+
+      - name: Upload to CurseForge
+        uses: itsmeow/curseforge-upload@v3
+        with:
+          file_path: ${{ env.ZIP_NAME }}
+          game_endpoint: "wow"
+          project_id: ${{ vars.CF_PROJECT_ID }}
+          game_versions: ${{ vars.CF_GAME_VERSIONS }}
+          token: ${{ secrets.CF_API_TOKEN }}
