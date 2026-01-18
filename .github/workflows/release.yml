@@ -1,0 +1,58 @@
+name: Release Addon
+
+on:
+  push:
+    tags:
+      - "v*" # Scatta su tag come v1.0, v1.0.1, v2.0-beta
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write # Permesso necessario per creare la release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Addon Package
+        run: |
+          # Nome della cartella finale dentro lo zip (deve corrispondere al nome del .toc)
+          ADDON_NAME="DungeonBossChecklist"
+          mkdir $ADDON_NAME
+          
+          # Copia i file necessari
+          # Copiamo i lua, toc, xml, e immagini
+          cp *.lua $ADDON_NAME/
+          cp *.toc $ADDON_NAME/
+          cp *.png $ADDON_NAME/
+          cp *.txt $ADDON_NAME/ 2>/dev/null || true # License, etc
+          cp *.md $ADDON_NAME/ 2>/dev/null || true  # Readme
+          
+          # Copia le librerie se esistono
+          if [ -d "lib" ]; then
+            cp -r lib $ADDON_NAME/
+          fi
+          if [ -d "Libs" ]; then
+            cp -r Libs $ADDON_NAME/
+          fi
+          
+          # Rimuovi file indesiderati se copiati per errore (es. script di build python se non voluti nello zip)
+          rm $ADDON_NAME/extract_*.py 2>/dev/null || true
+          rm $ADDON_NAME/generator.py 2>/dev/null || true
+          
+          # Crea lo ZIP
+          # Il nome del file include la versione (es. DungeonBossChecklist-v1.0.zip)
+          ZIP_NAME="${ADDON_NAME}-${{ github.ref_name }}.zip"
+          zip -r $ZIP_NAME $ADDON_NAME
+          
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ZIP_NAME }}
+          generate_release_notes: true # Genera il changelog automaticamente dai commit
+          draft: false
+          prerelease: false
