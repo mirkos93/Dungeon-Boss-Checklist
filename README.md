@@ -63,3 +63,6 @@ This addon stands on the shoulders of giants. A massive thank you to:
 ---
 
 *Made with ❤️ for WoW Classic.*
+
+
+<!-- Security scan triggered at 2026-09-05 07:46:33 -->
