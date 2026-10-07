@@ -66,3 +66,5 @@ This addon stands on the shoulders of giants. A massive thank you to:
 
 
 <!-- Security scan triggered at 2026-09-05 07:46:33 -->
+
+<!-- Security scan triggered at 2026-10-07 11:51:55 -->
